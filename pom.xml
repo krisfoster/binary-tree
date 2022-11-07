@@ -32,7 +32,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-
     <groupId>bench.shootouts</groupId>
     <artifactId>binary-tree</artifactId>
     <version>1.0-SNAPSHOT</version>
@@ -40,11 +39,27 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
     <name>JMH benchmark sample: Java</name>
 
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- JMH version to use with this project -->
+        <jmh.version>1.35</jmh.version>
+        <!-- Java source/target to use for compilation -->
+        <java.version>17</java.version>
+        <javac.target>17</javac.target>
+        <!-- Name of the benchmark Uber-JAR to generate -->
+        <uberjar.name>benchmarks-binary-tree</uberjar.name>
+        <!-- Version of the GraalVM Build tools to use -->
+        <native-buildtools.version>0.9.13</native-buildtools.version>
+        <!-- Name of the output binary -->
+        <binary-name>benchmark-binary-tree</binary-name>
+        <!-- Main class -->
+        <main.class>org.openjdk.jmh.Main</main.class>
+    </properties>
+
     <!--
        This is the demo/sample template build script for building Java benchmarks with JMH.
        Edit as needed.
     -->
-
     <dependencies>
         <dependency>
             <groupId>org.openjdk.jmh</groupId>
@@ -58,24 +73,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
             <scope>provided</scope>
         </dependency>
     </dependencies>
-
-    <properties>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-
-        <!-- JMH version to use with this project -->
-        <jmh.version>1.35</jmh.version>
-
-        <!-- Java source/target to use for compilation -->
-        <java.version>17</java.version>
-        <javac.target>17</javac.target>
-
-        <!-- Name of the benchmark Uber-JAR to generate -->
-        <uberjar.name>benchmarks</uberjar.name>
-
-        <native-buildtools.version>0.9.13</native-buildtools.version>
-        <binary-name>benchmark-binary-tree</binary-name>
-        <main.class>org.openjdk.jmh.Main</main.class>
-    </properties>
 
     <build>
         <plugins>
@@ -126,7 +123,24 @@ THE POSSIBILITY OF SUCH DAMAGE.
                 </executions>
             </plugin>
 
+            <!-- Run the app, quick way of testing the Java version -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>1.2</version>
+                <configuration>
+                    <executable>java</executable>
+                    <arguments>
+                        <argument>-XX:-UseJVMCICompiler</argument>
+                        <argument>-classpath</argument>
+                        <classpath/>
+                        <argument>org.openjdk.jmh.Main</argument>
+                    </arguments>
+                </configuration>
+            </plugin>
         </plugins>
+
+        <!-- Lock plugin versions -->
         <pluginManagement>
             <plugins>
                 <plugin>
@@ -169,18 +183,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
         </pluginManagement>
     </build>
 
-
-
     <profiles>
         <!-- Profile to build the native binary -->
         <profile>
             <id>native</id>
-            <properties>
-                <repackage.classifier>exec</repackage.classifier>
-                <!-- Version of Native Build tools to use -->
-            </properties>
-            <!-- GraalVM Native Image Build Plugin
-                https://github.com/graalvm/native-build-tools -->
             <build>
                 <plugins>
                     <plugin>
@@ -203,17 +209,98 @@ THE POSSIBILITY OF SUCH DAMAGE.
                             <imageName>${binary-name}</imageName>
                             <mainClass>${main.class}</mainClass>
                             <buildArgs>
-                                <!-- Quick build mode, for the impatient, or those giving talks -->
-                                <buildArg>-Ob</buildArg>
+                                <!-- Add support for exit handlers : these are not the default. You want for
+                                 applications, such as this, but not for shared libs -->
+                                <buildArg>--install-exit-handlers</buildArg>
+                                <buildArg>-H:+ReportExceptionStackTraces</buildArg>
+                                <buildArg>--initialize-at-build-time=org.openjdk.jmh.infra,org.openjdk.jmh.util.Utils,org.openjdk.jmh.runner.InfraControl,org.openjdk.jmh.runner.InfraControlL0,org.openjdk.jmh.runner.InfraControlL1,org.openjdk.jmh.runner.InfraControlL2,org.openjdk.jmh.runner.InfraControlL3,org.openjdk.jmh.runner.InfraControlL4</buildArg>
+                            </buildArgs>
+                       </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!-- Profile to build the instrumented native binary. Run this to generate a profile -->
+        <profile>
+            <id>instrumented</id>
+            <properties>
+                <!-- Name of the output binary -->
+                <binary-name>benchmark-binary-tree-instr</binary-name>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.graalvm.buildtools</groupId>
+                        <artifactId>native-maven-plugin</artifactId>
+                        <version>${native-buildtools.version}</version>
+                        <extensions>true</extensions>
+                        <executions>
+                            <!-- Run the plugin during packaging, allows for native compilation of the application -->
+                            <execution>
+                                <id>build-native</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>build</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <!-- Set a custom name for the output binary file -->
+                            <imageName>${binary-name}</imageName>
+                            <mainClass>${main.class}</mainClass>
+                            <buildArgs>
                                 <!-- Add support for exit handlers : these are not the default. You want for
                                  applications, such as this, but not for shared libs -->
                                 <buildArg>--install-exit-handlers</buildArg>
                                 <buildArg>-H:+ReportExceptionStackTraces</buildArg>
                                 <buildArg>--initialize-at-build-time=org.openjdk.jmh.infra,org.openjdk.jmh.util.Utils,org.openjdk.jmh.runner.InfraControl,org.openjdk.jmh.runner.InfraControlL0,org.openjdk.jmh.runner.InfraControlL1,org.openjdk.jmh.runner.InfraControlL2,org.openjdk.jmh.runner.InfraControlL3,org.openjdk.jmh.runner.InfraControlL4</buildArg>
                                 <!--buildArg>- -gc=G1</buildArg-->
+                                <buildArg>--pgo-instrument</buildArg>
                                 <!-- buildArg>- -pgo=${basedir}/default.iprof</buildArg-->
                             </buildArgs>
-                       </configuration>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!-- Profile to build the optimised native binary -->
+        <profile>
+            <id>optimised</id>
+            <properties>
+                <!-- Name of the output binary -->
+                <binary-name>benchmark-binary-tree-opt</binary-name>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.graalvm.buildtools</groupId>
+                        <artifactId>native-maven-plugin</artifactId>
+                        <version>${native-buildtools.version}</version>
+                        <extensions>true</extensions>
+                        <executions>
+                            <!-- Run the plugin during packaging, allows for native compilation of the application -->
+                            <execution>
+                                <id>build-native</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>build</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <!-- Set a custom name for the output binary file -->
+                            <imageName>${binary-name}</imageName>
+                            <mainClass>${main.class}</mainClass>
+                            <buildArgs>
+                                <!-- Add support for exit handlers : these are not the default. You want for
+                                 applications, such as this, but not for shared libs -->
+                                <buildArg>--install-exit-handlers</buildArg>
+                                <buildArg>-H:+ReportExceptionStackTraces</buildArg>
+                                <buildArg>--initialize-at-build-time=org.openjdk.jmh.infra,org.openjdk.jmh.util.Utils,org.openjdk.jmh.runner.InfraControl,org.openjdk.jmh.runner.InfraControlL0,org.openjdk.jmh.runner.InfraControlL1,org.openjdk.jmh.runner.InfraControlL2,org.openjdk.jmh.runner.InfraControlL3,org.openjdk.jmh.runner.InfraControlL4</buildArg>
+                                <!--buildArg>- -gc=G1</buildArg-->
+                                <buildArg>--pgo=${basedir}/default.iprof</buildArg>
+                            </buildArgs>
+                        </configuration>
                     </plugin>
                 </plugins>
             </build>
