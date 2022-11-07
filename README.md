@@ -1,7 +1,10 @@
 # Binary Tree Benchmark 
 
-This sample code demonstrates how to run a JMH benchmark as a native image.
+This demo shows how to run a JMH benchmark as a native image.
 
+To build the native image requires profiling the code using the agent, be aware that when you do this
+you will need to ensure that the JMH `fork` parameter is set to 0, which can be done from the command line
+with, `-f 0`, and this can also be doen within the code using the `@Fork` annotation.
 
 ## Build and Run as a Java Application
 
@@ -11,7 +14,11 @@ To build and then run the benchmark as a Java application, run the following com
 ./mvnw clean package exec:exec
 ```
 
-The program will run the benchmark and display, to the terminal, the results. We are interested in the final result and 
+Note that within the `pom.xml` file we are explicitly turning off GraalVM JIT compiler, with the flag,, `-XX:-UseJVMCICompiler`. 
+This means that benchmark will run using the C2 JIT.
+
+The program will run the benchmark and display, to the terminal, the results. We are interested in the final result and we
+saw:
 
 ```shell
 Benchmark          (binaryTreesN)   Mode  Cnt    Score    Error  Units
